@@ -3,6 +3,13 @@ import numpy as np
 import odl
 from odl.contrib.torch import OperatorModule
 
+def compute_sinogram(input_tensor: torch.Tensor,
+                     operator):
+    
+    sinogram = operator(input_tensor)
+
+    return sinogram
+
 def expand_sinogram(split_sinogram: torch.Tensor,
                     num_of_splits: int,
                     device='cuda') -> torch.Tensor:
@@ -22,9 +29,9 @@ def to_cpu(input_tensor: torch.Tensor) -> np.array:
 
 def data_split(num_of_images, num_of_splits, shape, averaged, noisy_sinograms, split_FBP_module, domain, device, ray_transform):
     sinogram_split = torch.zeros((num_of_images, num_of_splits) + (int(noisy_sinograms.shape[1]/num_of_splits), noisy_sinograms.shape[2])).to(device)
-    sinogram_split2 = torch.zeros((num_of_images, num_of_splits) + (int(noisy_sinograms.shape[1]/num_of_splits), noisy_sinograms.shape[2])).to(device)
+    # sinogram_split2 = torch.zeros((num_of_images, num_of_splits) + (int(noisy_sinograms.shape[1]/num_of_splits), noisy_sinograms.shape[2])).to(device)
     rec_split = torch.zeros((num_of_images, num_of_splits) + (shape)).to(device)
-    rec_split2 = torch.zeros((num_of_images, num_of_splits) + (shape)).to(device)
+    # rec_split2 = torch.zeros((num_of_images, num_of_splits) + (shape)).to(device)
     # operator_split = []
     # split_list = list(range(num_of_splits))
     # split_geom = [geometry[j::num_of_splits] for j in split_list]
@@ -59,3 +66,44 @@ def data_split(num_of_images, num_of_splits, shape, averaged, noisy_sinograms, s
 
     return input_reco, target_reco, sinogram_reco, \
         target_sinogram_reco, rec_split, sinogram_split
+
+
+def geometry_plus_ray_trafo(min_domain_point: tuple[int, int],
+                            max_domain_point: tuple[int, int],
+                            shape: tuple[int,int],
+                            num_of_angles: int,
+                            num_of_lines: int,
+                            angle_interval: tuple[float, float],
+                            line_interval: tuple[float, float],
+                            source_radius: float,
+                            detector_radius: float,
+                            dtype: str,
+                            device='cuda'
+                            ):
+    
+    device = 'astra_' + device
+
+    domain = odl.uniform_discr(min_pt=min_domain_point,
+                               max_pt=max_domain_point,
+                               shape=shape,
+                               dtype=dtype)
+    
+    angles = odl.uniform_partition(angle_interval[0],
+                                   angle_interval[1],
+                                   num_of_angles)
+    
+    lines = odl.uniform_partition(line_interval[0],
+                                  line_interval[1],
+                                  num_of_lines)
+    
+    geometry = odl.tomo.FanBeamGeometry(angles,
+                                        lines,
+                                        source_radius,
+                                        detector_radius)
+    
+    output_shape = (num_of_angles, num_of_lines)
+
+    ray_transform = odl.tomo.RayTransform(domain, geometry, impl=device)
+    
+    return domain, geometry, ray_transform, output_shape
+
